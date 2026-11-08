@@ -23,7 +23,7 @@ export default function Home() {
         <Kingdom />
         <div className="hero-copy">
           <p className="eyebrow">
-            {profile.title} · {profile.location}
+            {profile.roles} · {profile.location}
           </p>
           <h1>{profile.name}</h1>
           <p className="hero-tagline">{profile.tagline}</p>

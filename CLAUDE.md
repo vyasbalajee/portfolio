@@ -9,6 +9,7 @@ Personal portfolio. React + Vite + TypeScript, hosted on Vercel.
 
 ## Content rules
 
+- Positioning order: software developer and backend engineer first, builder second.
 - All site copy lives in `src/content.ts`. Use only facts Vyas has provided; never invent them.
 - Missing facts use `gap()`: visible in dev, hidden in production builds, and tracked in `GAPS.md`.
 - Keep the phone number off the site and out of any published résumé.

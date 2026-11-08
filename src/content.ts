@@ -23,12 +23,13 @@ export type Project = {
 
 export const profile = {
   name: 'Vyas Balajee',
-  title: 'Builder',
+  title: 'Software Developer & Backend Engineer',
+  roles: 'Software developer · Backend engineer',
   location: 'Tempe, AZ',
-  tagline: 'I build software that ships, from the database to the interface.',
+  tagline: 'Backend engineer building reliable software, from the database to the interface.',
   intro:
     'Sole developer of a production quiz platform, backend developer on an AI assessment platform, and a Computer Science student at Arizona State University.',
-  availability: 'Open to full-stack, backend, and new grad or internship roles.',
+  availability: 'Open to backend, software engineering, and full-stack roles, including new grad and internships.',
   email: 'vyasbalaje@gmail.com',
   linkedin: 'https://www.linkedin.com/in/vyas-balajee-7aba9229a',
   github: 'https://github.com/vyasbalajee',
