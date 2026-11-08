@@ -20,16 +20,17 @@ export type Landmark = {
 export type Point = { x: number; z: number }
 export type Collider = Point & { r: number }
 
-export type House = Point & {
-  rotation: number
-  width: number
-  depth: number
-  height: number
-  wall: string
-  roof: string
-}
+export type HouseVariant = 'cottage' | 'townhouse' | 'longhouse'
+export type House = Point & { rotation: number; variant: HouseVariant }
 
-export type Tree = Point & { kind: 'pine' | 'blossom'; scale: number }
+export type TreeKind = 'pine' | 'tallPine' | 'blossom' | 'oak' | 'round'
+export type Tree = Point & { kind: TreeKind; scale: number; rotation: number }
+
+export type DecorKind = 'bush' | 'smallBush' | 'redFlower' | 'yellowFlower' | 'purpleFlower' | 'rock' | 'pebble'
+export type Decor = Point & { kind: DecorKind; scale: number; rotation: number }
+
+// Footprint radius of each house design, used for spacing and collisions.
+export const houseRadius: Record<HouseVariant, number> = { cottage: 3, townhouse: 3, longhouse: 3.7 }
 
 export const WALL_RADIUS = 50
 export const WALK_RADIUS = 44
@@ -138,62 +139,91 @@ function distanceToSegment(p: Point, a: Point, b: Point) {
   return Math.hypot(p.x - (a.x + abx * t), p.z - (a.z + abz * t))
 }
 
+// Kept clear around the start point and the camera behind it, so the opening view is open.
+const ARRIVAL_CLEARING: Collider = { x: SPAWN.x, z: SPAWN.z + 5, r: 9 }
+
 function isOpenGround(p: Point, clearance: number) {
   return (
+    Math.hypot(p.x - ARRIVAL_CLEARING.x, p.z - ARRIVAL_CLEARING.z) > ARRIVAL_CLEARING.r + clearance &&
     !landmarks.some((l) => Math.hypot(p.x - l.x, p.z - l.z) < l.radius + clearance + 2) &&
     !paths.some(([a, b]) => distanceToSegment(p, a, b) < clearance + 1.8) &&
     Math.hypot(p.x - FOUNTAIN.x, p.z - FOUNTAIN.z) > FOUNTAIN.r + clearance + 3
   )
 }
 
-const wallColors = ['#f4e7cf', '#efd9c0', '#f6efe2', '#e9d6bd']
-const roofColors = ['#d9534f', '#c8443f', '#4b6fb5', '#3f8f86', '#d9534f']
+const variants: HouseVariant[] = ['cottage', 'cottage', 'townhouse', 'longhouse']
+const treeKinds: TreeKind[] = ['blossom', 'blossom', 'pine', 'tallPine', 'oak', 'round']
+const decorKinds: DecorKind[] = ['bush', 'bush', 'smallBush', 'redFlower', 'yellowFlower', 'purpleFlower', 'rock', 'pebble']
+
+function randomSpot(random: () => number, min: number, max: number): Point {
+  const angle = random() * Math.PI * 2
+  const distance = min + random() * (max - min)
+  return { x: Math.cos(angle) * distance, z: Math.sin(angle) * distance }
+}
 
 function buildHouses() {
   const random = seeded(7)
   const houses: House[] = []
-  for (let attempt = 0; attempt < 1200 && houses.length < 54; attempt++) {
-    const angle = random() * Math.PI * 2
-    const distance = 12 + random() * 31
-    const spot = { x: Math.cos(angle) * distance, z: Math.sin(angle) * distance }
-    if (!isOpenGround(spot, 2.6)) continue
-    if (houses.some((h) => Math.hypot(h.x - spot.x, h.z - spot.z) < 5.4)) continue
-    houses.push({
-      ...spot,
-      rotation: Math.round(random() * 4) * (Math.PI / 2) + (random() - 0.5) * 0.3,
-      width: 2.8 + random() * 1.6,
-      depth: 2.8 + random() * 1.4,
-      height: 2.4 + random() * 1.8,
-      wall: wallColors[Math.floor(random() * wallColors.length)],
-      roof: roofColors[Math.floor(random() * roofColors.length)],
-    })
+  for (let attempt = 0; attempt < 2000 && houses.length < 34; attempt++) {
+    const spot = randomSpot(random, 13, 41)
+    const variant = variants[Math.floor(random() * variants.length)]
+    const radius = houseRadius[variant]
+    if (!isOpenGround(spot, radius)) continue
+    if (houses.some((h) => Math.hypot(h.x - spot.x, h.z - spot.z) < radius + houseRadius[h.variant] + 1.6)) continue
+    // Face the nearest path so front doors open onto the street.
+    const facing = Math.atan2(FOUNTAIN.x - spot.x, FOUNTAIN.z - spot.z)
+    houses.push({ ...spot, variant, rotation: Math.round(facing / (Math.PI / 2)) * (Math.PI / 2) })
   }
   return houses
+}
+
+function clearOfHouses(p: Point, houses: House[], gap: number) {
+  return houses.every((h) => Math.hypot(h.x - p.x, h.z - p.z) > houseRadius[h.variant] + gap)
 }
 
 function buildTrees(houses: House[]) {
   const random = seeded(21)
   const trees: Tree[] = []
-  for (let attempt = 0; attempt < 1500 && trees.length < 70; attempt++) {
-    const angle = random() * Math.PI * 2
-    const distance = 9 + random() * 37
-    const spot = { x: Math.cos(angle) * distance, z: Math.sin(angle) * distance }
-    if (!isOpenGround(spot, 0.8)) continue
-    if (houses.some((h) => Math.hypot(h.x - spot.x, h.z - spot.z) < 3.4)) continue
-    if (trees.some((t) => Math.hypot(t.x - spot.x, t.z - spot.z) < 2.2)) continue
-    trees.push({ ...spot, kind: random() < 0.45 ? 'blossom' : 'pine', scale: 0.85 + random() * 0.5 })
+  for (let attempt = 0; attempt < 2000 && trees.length < 64; attempt++) {
+    const spot = randomSpot(random, 9, 45)
+    if (!isOpenGround(spot, 0.9) || !clearOfHouses(spot, houses, 1.2)) continue
+    if (trees.some((t) => Math.hypot(t.x - spot.x, t.z - spot.z) < 2.6)) continue
+    trees.push({
+      ...spot,
+      kind: treeKinds[Math.floor(random() * treeKinds.length)],
+      scale: 0.85 + random() * 0.4,
+      rotation: random() * Math.PI * 2,
+    })
   }
   return trees
 }
 
+function buildDecor(houses: House[], trees: Tree[]) {
+  const random = seeded(33)
+  const decor: Decor[] = []
+  for (let attempt = 0; attempt < 3000 && decor.length < 110; attempt++) {
+    const spot = randomSpot(random, 8, 46)
+    if (!isOpenGround(spot, 0.2) || !clearOfHouses(spot, houses, 0.3)) continue
+    if (trees.some((t) => Math.hypot(t.x - spot.x, t.z - spot.z) < 1.2)) continue
+    decor.push({
+      ...spot,
+      kind: decorKinds[Math.floor(random() * decorKinds.length)],
+      scale: 0.8 + random() * 0.5,
+      rotation: random() * Math.PI * 2,
+    })
+  }
+  return decor
+}
+
 export const houses = buildHouses()
 export const trees = buildTrees(houses)
+export const decor = buildDecor(houses, trees)
 
 const colliders: Collider[] = [
   FOUNTAIN,
   ...landmarks.map((l) => ({ x: l.x, z: l.z, r: l.solid })),
-  ...houses.map((h) => ({ x: h.x, z: h.z, r: Math.max(h.width, h.depth) * 0.6 })),
-  ...trees.map((t) => ({ x: t.x, z: t.z, r: 0.5 })),
+  ...houses.map((h) => ({ x: h.x, z: h.z, r: houseRadius[h.variant] })),
+  ...trees.map((t) => ({ x: t.x, z: t.z, r: 0.55 })),
 ]
 
 export function resolveCollisions(p: Point, radius = 0.5) {

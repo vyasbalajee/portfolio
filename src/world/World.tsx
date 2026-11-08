@@ -1,3 +1,4 @@
+import { useProgress } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -7,6 +8,7 @@ import Joystick from './Joystick'
 import Landmarks from './Landmarks'
 import { SPAWN, landmarks, type Landmark, type LandmarkId } from './layout'
 import MiniMap from './MiniMap'
+import { Nature, Village } from './models'
 import Player from './Player'
 import { createWorldState, movementKeys } from './state'
 
@@ -19,6 +21,16 @@ function useMediaQuery(query: string) {
     return () => media.removeEventListener('change', update)
   }, [query])
   return matches
+}
+
+function LoadingOverlay() {
+  const { active, progress } = useProgress()
+  if (!active && progress === 100) return null
+  return (
+    <div className="world-loading world-loading-overlay" role="status">
+      Raising the kingdom… {Math.round(progress)}%
+    </div>
+  )
 }
 
 function hasWebGL() {
@@ -115,14 +127,17 @@ export default function World() {
         shadows={!touch}
         dpr={touch ? [1, 1.25] : [1, 1.75]}
         gl={{ antialias: !touch }}
-        camera={{ fov: 50, near: 0.5, far: 900, position: [SPAWN.x, 7.5, SPAWN.z + 13] }}
+        camera={{ fov: 50, near: 0.5, far: 900, position: [SPAWN.x, 9.5, SPAWN.z + 13] }}
       >
         <Suspense fallback={null}>
           <Environment shadows={!touch} />
           <Landmarks animate={!reducedMotion} />
+          <Village />
+          <Nature />
           <Player state={state} onNearby={handleNearby} />
         </Suspense>
       </Canvas>
+      <LoadingOverlay />
 
       <div className="world-hud">
         <h1>The sky kingdom</h1>
@@ -137,6 +152,7 @@ export default function World() {
           )}
         </p>
         <Link to="/">Skip the tour</Link>
+        <p className="world-credits">Models by Kay Lousberg, Kenney and Quaternius (CC0).</p>
       </div>
 
       <MiniMap state={state} />

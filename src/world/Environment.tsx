@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { BackSide, Color } from 'three'
-import { FOUNTAIN, GATE_ANGLE, WALL_RADIUS, houses, paths, trees } from './layout'
+import { FOUNTAIN, GATE_ANGLE, WALL_RADIUS, paths } from './layout'
 import Toon from './Toon'
 
 export const SKY_FOG = '#f3b08a'
@@ -243,67 +243,6 @@ function Fountain() {
   )
 }
 
-function Houses() {
-  return (
-    <>
-      {houses.map((h, i) => (
-        <group key={i} position={[h.x, 0, h.z]} rotation={[0, h.rotation, 0]}>
-          <mesh castShadow receiveShadow position={[0, h.height / 2, 0]}>
-            <boxGeometry args={[h.width, h.height, h.depth]} />
-            <Toon color={h.wall} />
-          </mesh>
-          <group position={[0, h.height + 1.1, 0]} scale={[h.width, 1, h.depth]}>
-            <mesh castShadow rotation={[0, Math.PI / 4, 0]}>
-              <coneGeometry args={[0.82, 2.2, 4]} />
-              <Toon color={h.roof} />
-            </mesh>
-          </group>
-          <mesh position={[0, 0.8, h.depth / 2 + 0.01]}>
-            <boxGeometry args={[0.8, 1.6, 0.05]} />
-            <Toon color="#5b3d4f" />
-          </mesh>
-          <mesh position={[h.width * 0.28, h.height * 0.62, h.depth / 2 + 0.01]}>
-            <boxGeometry args={[0.6, 0.6, 0.05]} />
-            <meshBasicMaterial color="#ffd27a" />
-          </mesh>
-        </group>
-      ))}
-    </>
-  )
-}
-
-function Trees() {
-  return (
-    <>
-      {trees.map((t, i) => (
-        <group key={i} position={[t.x, 0, t.z]} scale={t.scale}>
-          <mesh castShadow position={[0, 0.7, 0]}>
-            <cylinderGeometry args={[0.18, 0.26, 1.4, 8]} />
-            <Toon color="#7a5440" />
-          </mesh>
-          {t.kind === 'pine' ? (
-            <>
-              <mesh castShadow position={[0, 2.1, 0]}>
-                <coneGeometry args={[1.2, 2, 10]} />
-                <Toon color="#4f9a5b" />
-              </mesh>
-              <mesh castShadow position={[0, 3.1, 0]}>
-                <coneGeometry args={[0.85, 1.6, 10]} />
-                <Toon color="#5fae66" />
-              </mesh>
-            </>
-          ) : (
-            <mesh castShadow position={[0, 2.3, 0]}>
-              <sphereGeometry args={[1.3, 14, 10]} />
-              <Toon color="#f4a7bb" />
-            </mesh>
-          )}
-        </group>
-      ))}
-    </>
-  )
-}
-
 export default function Environment({ shadows }: { shadows: boolean }) {
   const sun = SUN_DIRECTION.map((v) => v * 90) as [number, number, number]
   return (
@@ -330,8 +269,6 @@ export default function Environment({ shadows }: { shadows: boolean }) {
       <Walls />
       <Paths />
       <Fountain />
-      <Houses />
-      <Trees />
     </>
   )
 }

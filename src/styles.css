@@ -576,6 +576,19 @@ main:focus {
   text-underline-offset: 3px;
 }
 
+.world-credits {
+  margin-top: 6px;
+  color: var(--cream-soft);
+  font-size: 0.75rem;
+}
+
+.world-loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  height: auto;
+}
+
 .world-label {
   display: block;
   padding: 3px 10px;

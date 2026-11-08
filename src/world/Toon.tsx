@@ -1,7 +1,7 @@
 import { DataTexture, NearestFilter, RedFormat } from 'three'
 
 // Three flat bands of light give the cel-shaded anime look.
-const gradient = new DataTexture(new Uint8Array([110, 185, 255]), 3, 1, RedFormat)
+export const gradient = new DataTexture(new Uint8Array([110, 185, 255]), 3, 1, RedFormat)
 gradient.minFilter = NearestFilter
 gradient.magFilter = NearestFilter
 gradient.needsUpdate = true
