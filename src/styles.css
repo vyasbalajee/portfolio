@@ -445,6 +445,14 @@ main:focus {
   padding-left: 20px;
 }
 
+.case-body li + li {
+  margin-top: 6px;
+}
+
+.case-body p + p {
+  margin-top: 14px;
+}
+
 .case-body .chips {
   margin-top: 0;
 }

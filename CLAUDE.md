@@ -12,7 +12,7 @@ Personal portfolio. React + Vite + TypeScript, hosted on Vercel.
 - All site copy lives in `src/content.ts`. Use only facts Vyas has provided; never invent them.
 - Missing facts use `gap()`: visible in dev, hidden in production builds, and tracked in `GAPS.md`.
 - Keep the phone number off the site and out of any published résumé.
-- SkipCourse stays high-level: no security findings, compliance audit details or architecture details.
+- SkipCourse: publish only sponsor-approved material (the current case study copy and the published résumé).
 
 ## Roadmap
 
