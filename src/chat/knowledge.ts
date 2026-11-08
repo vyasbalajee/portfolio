@@ -1,4 +1,5 @@
-import { education, experience, profile, projects, skills, type Copy } from '../content'
+// Runs on the server too, where Node's ES module loader needs the extension.
+import { education, experience, profile, projects, skills, type Copy } from '../content.js'
 
 // Only finished copy goes to the model; gaps are left out so it can't guess at them.
 function text(copy: Copy) {

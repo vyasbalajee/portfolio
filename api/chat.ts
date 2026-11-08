@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { SYSTEM_PROMPT } from '../src/chat/knowledge'
+// Node's ES module loader needs explicit extensions in server code.
+import { SYSTEM_PROMPT } from '../src/chat/knowledge.js'
 
 // Vercel serverless function: answers questions about Vyas, streaming plain text back.
 
