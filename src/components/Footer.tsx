@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { profile } from '../content'
 
 export default function Footer() {
@@ -6,7 +7,7 @@ export default function Footer() {
       <span>
         {profile.name}, {profile.location}
       </span>
-      <span>Something bigger is being built here.</span>
+      <Link to="/world">Explore the sky kingdom →</Link>
     </footer>
   )
 }

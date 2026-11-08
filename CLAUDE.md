@@ -17,6 +17,8 @@ Personal portfolio. React + Vite + TypeScript, hosted on Vercel.
 
 ## Roadmap
 
-1. Quick View site with real content (this phase).
+1. Quick View site with real content (done).
 2. Explorable anime sky kingdom at golden hour: third-person hero, walled city, project landmarks, mini map.
+   First version is live at `/world` (`src/world/`), with every model built in code. Next: swap in free
+   CC0 models once Vyas approves the downloads.
 3. AI chat answering only from Vyas's info, NPC dialogue, ambient music (off by default), day/night cycle, easter eggs.

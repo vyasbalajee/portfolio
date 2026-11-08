@@ -32,6 +32,9 @@ export default function Home() {
             <Link className="button button-primary" to="/#projects">
               See what I've built
             </Link>
+            <Link className="button" to="/world">
+              Explore the kingdom
+            </Link>
             {profile.resumeUrl && (
               <a className="button" href={profile.resumeUrl}>
                 Download résumé
