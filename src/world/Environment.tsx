@@ -1,5 +1,15 @@
-import { useMemo } from 'react'
-import { BackSide, Color } from 'three'
+import { useFrame, useThree } from '@react-three/fiber'
+import { useMemo, useRef } from 'react'
+import {
+  BackSide,
+  Color,
+  Vector3,
+  type DirectionalLight,
+  type HemisphereLight,
+  type Mesh,
+  type MeshBasicMaterial,
+  type PointsMaterial,
+} from 'three'
 import { FOUNTAIN, GATE_ANGLE, WALL_RADIUS, paths } from './layout'
 import Toon from './Toon'
 
@@ -33,22 +43,208 @@ const skyShader = {
     }`,
 }
 
-function Sky() {
-  const sun = SUN_DIRECTION.map((v) => v * 360) as [number, number, number]
+export type TimeOfDay = 'day' | 'golden' | 'night'
+
+export function localTimeOfDay(date = new Date()): TimeOfDay {
+  const hour = date.getHours()
+  if (hour >= 19 || hour < 6) return 'night'
+  if (hour >= 17 || hour < 8) return 'golden'
+  return 'day'
+}
+
+type Palette = {
+  top: string
+  middle: string
+  bottom: string
+  fog: string
+  hemiSky: string
+  hemiGround: string
+  hemi: number
+  light: string
+  lightIntensity: number
+  // The sun by day, the moon at night.
+  direction: [number, number, number]
+  disc: string
+  halo: string
+  stars: number
+}
+
+const palettes: Record<TimeOfDay, Palette> = {
+  day: {
+    top: '#3f7fd1',
+    middle: '#9fcdf0',
+    bottom: '#f4efd8',
+    fog: '#cfe3ef',
+    hemiSky: '#ffffff',
+    hemiGround: '#8a9a6b',
+    hemi: 1.6,
+    light: '#fff3d6',
+    lightIntensity: 2.8,
+    direction: [-0.4, 0.8, -0.45],
+    disc: '#fffbe8',
+    halo: '#fff2b0',
+    stars: 0,
+  },
+  golden: {
+    top: '#2c2160',
+    middle: '#e9826a',
+    bottom: '#ffd9a0',
+    fog: SKY_FOG,
+    hemiSky: '#ffe6c7',
+    hemiGround: '#7a5b86',
+    hemi: 1.4,
+    light: '#ffd2a6',
+    lightIntensity: 2.6,
+    direction: SUN_DIRECTION,
+    disc: '#fff0c4',
+    halo: '#ffd27a',
+    stars: 0.15,
+  },
+  night: {
+    top: '#060a22',
+    middle: '#1b2452',
+    bottom: '#3b3a72',
+    fog: '#1e2446',
+    hemiSky: '#8fa3ff',
+    hemiGround: '#1a1530',
+    hemi: 0.95,
+    light: '#aebcff',
+    lightIntensity: 0.9,
+    direction: [0.5, 0.55, -0.62],
+    disc: '#eef1ff',
+    halo: '#9fb0ff',
+    stars: 1,
+  },
+}
+
+function starPositions() {
+  const positions = new Float32Array(700 * 3)
+  let seed = 3
+  const random = () => {
+    seed = (seed * 16807) % 2147483647
+    return seed / 2147483647
+  }
+  for (let i = 0; i < 700; i++) {
+    const theta = random() * Math.PI * 2
+    const y = 0.05 + random() * 0.95
+    const r = Math.sqrt(1 - y * y)
+    positions.set([Math.cos(theta) * r * 380, y * 380, Math.sin(theta) * r * 380], i * 3)
+  }
+  return positions
+}
+
+// Lights, sky, sun or moon, fog and stars, easing towards the palette for the current time.
+function Lighting({ time, shadows }: { time: TimeOfDay; shadows: boolean }) {
+  const scene = useThree((three) => three.scene)
+  const hemi = useRef<HemisphereLight>(null)
+  const light = useRef<DirectionalLight>(null)
+  const disc = useRef<Mesh>(null)
+  const halo = useRef<Mesh>(null)
+  const stars = useRef<PointsMaterial>(null)
+  const stars3 = useMemo(starPositions, [])
+  const target = useMemo(() => new Color(), [])
+  const direction = useMemo(() => new Vector3(...palettes.golden.direction), [])
+  const goal = useMemo(() => new Vector3(), [])
+
+  useFrame((_, rawDelta) => {
+    const p = palettes[time]
+    const t = 1 - Math.exp(-2.5 * Math.min(rawDelta, 0.1))
+    const ease = (color: Color, value: string) => color.lerp(target.set(value), t)
+
+    ease(skyShader.uniforms.top.value, p.top)
+    ease(skyShader.uniforms.middle.value, p.middle)
+    ease(skyShader.uniforms.bottom.value, p.bottom)
+    if (scene.fog) ease(scene.fog.color, p.fog)
+    if (scene.background instanceof Color) ease(scene.background, p.fog)
+
+    direction.lerp(goal.set(...p.direction), t).normalize()
+    if (hemi.current) {
+      ease(hemi.current.color, p.hemiSky)
+      ease(hemi.current.groundColor, p.hemiGround)
+      hemi.current.intensity += (p.hemi - hemi.current.intensity) * t
+    }
+    if (light.current) {
+      ease(light.current.color, p.light)
+      light.current.intensity += (p.lightIntensity - light.current.intensity) * t
+      light.current.position.copy(direction).multiplyScalar(90)
+    }
+    if (disc.current && halo.current) {
+      disc.current.position.copy(direction).multiplyScalar(360)
+      halo.current.position.copy(disc.current.position)
+      ease((disc.current.material as MeshBasicMaterial).color, p.disc)
+      ease((halo.current.material as MeshBasicMaterial).color, p.halo)
+    }
+    if (stars.current) stars.current.opacity += (p.stars - stars.current.opacity) * t
+  })
+
   return (
     <>
+      <hemisphereLight ref={hemi} args={[palettes.golden.hemiSky, palettes.golden.hemiGround, palettes.golden.hemi]} />
+      <directionalLight
+        ref={light}
+        position={palettes.golden.direction.map((v) => v * 90) as [number, number, number]}
+        intensity={palettes.golden.lightIntensity}
+        color={palettes.golden.light}
+        castShadow={shadows}
+        shadow-mapSize={[2048, 2048]}
+        shadow-camera-left={-65}
+        shadow-camera-right={65}
+        shadow-camera-top={65}
+        shadow-camera-bottom={-65}
+        shadow-camera-far={220}
+        shadow-bias={-0.0006}
+      />
       <mesh>
         <sphereGeometry args={[420, 32, 16]} />
         <shaderMaterial args={[skyShader]} side={BackSide} depthWrite={false} fog={false} />
       </mesh>
-      <mesh position={sun}>
-        <sphereGeometry args={[22, 24, 12]} />
-        <meshBasicMaterial color="#fff0c4" fog={false} />
+      <points>
+        <bufferGeometry>
+          <bufferAttribute attach="attributes-position" args={[stars3, 3]} />
+        </bufferGeometry>
+        <pointsMaterial ref={stars} color="#ffffff" size={2} sizeAttenuation={false} transparent opacity={0.15} fog={false} depthWrite={false} />
+      </points>
+      <mesh ref={disc}>
+        <sphereGeometry args={[20, 24, 12]} />
+        <meshBasicMaterial color={palettes.golden.disc} fog={false} />
       </mesh>
-      <mesh position={sun}>
-        <sphereGeometry args={[38, 24, 12]} />
-        <meshBasicMaterial color="#ffd27a" transparent opacity={0.3} fog={false} />
+      <mesh ref={halo}>
+        <sphereGeometry args={[36, 24, 12]} />
+        <meshBasicMaterial color={palettes.golden.halo} transparent opacity={0.3} fog={false} />
       </mesh>
+    </>
+  )
+}
+
+// Lamp posts along the streets; they glow warmly, which reads best after dark.
+function Lamps() {
+  const spots = useMemo(() => {
+    const list: [number, number][] = []
+    for (const [a, b] of paths) {
+      const length = Math.hypot(b.x - a.x, b.z - a.z)
+      const nx = -(b.z - a.z) / length
+      const nz = (b.x - a.x) / length
+      for (let d = 6; d < length - 4; d += 9) {
+        const side = list.length % 2 === 0 ? 1 : -1
+        list.push([a.x + ((b.x - a.x) * d) / length + nx * 2.3 * side, a.z + ((b.z - a.z) * d) / length + nz * 2.3 * side])
+      }
+    }
+    return list
+  }, [])
+  return (
+    <>
+      {spots.map(([x, z]) => (
+        <group key={`${x}${z}`} position={[x, 0, z]}>
+          <mesh castShadow position={[0, 1.4, 0]}>
+            <cylinderGeometry args={[0.07, 0.1, 2.8, 6]} />
+            <Toon color="#3a2d4f" />
+          </mesh>
+          <mesh position={[0, 2.95, 0]}>
+            <boxGeometry args={[0.42, 0.5, 0.42]} />
+            <meshBasicMaterial color="#ffd27a" />
+          </mesh>
+        </group>
+      ))}
     </>
   )
 }
@@ -243,27 +439,13 @@ function Fountain() {
   )
 }
 
-export default function Environment({ shadows }: { shadows: boolean }) {
-  const sun = SUN_DIRECTION.map((v) => v * 90) as [number, number, number]
+export default function Environment({ shadows, time }: { shadows: boolean; time: TimeOfDay }) {
   return (
     <>
       <color attach="background" args={[SKY_FOG]} />
       <fog attach="fog" args={[SKY_FOG, 80, 280]} />
-      <hemisphereLight args={['#ffe6c7', '#7a5b86', 1.4]} />
-      <directionalLight
-        position={sun}
-        intensity={2.6}
-        color="#ffd2a6"
-        castShadow={shadows}
-        shadow-mapSize={[2048, 2048]}
-        shadow-camera-left={-65}
-        shadow-camera-right={65}
-        shadow-camera-top={65}
-        shadow-camera-bottom={-65}
-        shadow-camera-far={220}
-        shadow-bias={-0.0006}
-      />
-      <Sky />
+      <Lighting time={time} shadows={shadows} />
+      <Lamps />
       <Clouds />
       <Island />
       <Walls />

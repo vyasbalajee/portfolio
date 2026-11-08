@@ -52,7 +52,10 @@ const naturePieces = [
   'rock_smallC',
 ]
 
-const heroAnimations = ['Idle_A', 'Walking_A', 'Running_A']
+const heroAnimations = ['Idle_A', 'Walking_A', 'Running_A', 'Interact']
+
+// Townspeople share the hero's rig, so they reuse the same animation clips.
+const townspeople = ['Mage', 'Knight', 'Ranger', 'Barbarian']
 
 await MeshoptEncoder.ready
 const io = new NodeIO()
@@ -104,11 +107,11 @@ mkdirSync(out, { recursive: true })
 // Nature: flat-coloured, no textures.
 await write(await mergeFiles(naturePieces.map((p) => join(nature, `${p}.glb`))), 'nature.glb')
 
-// Hero: the Rogue model with its texture shrunk.
-{
-  const document = await io.read(join(kaykit, 'Characters/gltf/Rogue.glb'))
+// Characters: the Rogue hero and the townspeople, with textures shrunk.
+for (const [source, name] of [['Rogue', 'hero'], ...townspeople.map((t) => [t, `npc-${t.toLowerCase()}`])]) {
+  const document = await io.read(join(kaykit, `Characters/gltf/${source}.glb`))
   await document.transform(textureCompress({ encoder: sharp, targetFormat: 'webp', resize: [512, 512], quality: 85 }))
-  await write(document, 'hero.glb')
+  await write(document, `${name}.glb`)
 }
 
 // Hero animations: clips only, from the shared rig, with the rig's own preview mesh removed.

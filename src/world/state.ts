@@ -10,6 +10,8 @@ export type WorldState = {
   stick: Point
   run: boolean
   paused: boolean
+  // Fountain easter egg: faster running and a golden glow.
+  blessed: boolean
 }
 
 export function createWorldState(): WorldState {
@@ -20,6 +22,7 @@ export function createWorldState(): WorldState {
     stick: { x: 0, z: 0 },
     run: false,
     paused: false,
+    blessed: false,
   }
 }
 

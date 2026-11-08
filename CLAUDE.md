@@ -19,6 +19,11 @@ Personal portfolio. React + Vite + TypeScript, hosted on Vercel.
 
 1. Quick View site with real content (done).
 2. Explorable anime sky kingdom at golden hour: third-person hero, walled city, project landmarks, mini map.
-   First version is live at `/world` (`src/world/`), with every model built in code. Next: swap in free
-   CC0 models once Vyas approves the downloads.
+   Live at `/world` (`src/world/`), using CC0 models (see `CREDITS.md`).
 3. AI chat answering only from Vyas's info, NPC dialogue, ambient music (off by default), day/night cycle, easter eggs.
+   Built. The chat (`api/chat.ts`, `src/chat/`) needs `ANTHROPIC_API_KEY` set in Vercel by Vyas.
+
+## AI chat rules
+
+- Grounded only in `src/content.ts` via `src/chat/knowledge.ts`; gaps are never sent to the model.
+- Uses `claude-opus-5-5` at low effort with short answers. Cost ceiling is the spend limit on the API key.

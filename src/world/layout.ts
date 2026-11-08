@@ -112,7 +112,65 @@ export const landmarks: Landmark[] = [
   },
 ]
 
-export const paths: [Point, Point][] = [[SPAWN, FOUNTAIN], ...landmarks.map((l): [Point, Point] => [FOUNTAIN, l])]
+export type NpcId = 'sage' | 'knight' | 'ranger' | 'guard'
+export type Npc = Point & {
+  id: NpcId
+  name: string
+  model: 'mage' | 'knight' | 'ranger' | 'barbarian'
+  // The sage opens the AI chat instead of reciting lines.
+  opensChat?: boolean
+  lines: string[]
+}
+
+export const npcs: Npc[] = [
+  {
+    id: 'sage',
+    name: 'The sage',
+    model: 'mage',
+    x: 5,
+    z: 11,
+    opensChat: true,
+    lines: ["Greetings, traveller. I know Vyas's story well. Ask me anything about his work."],
+  },
+  {
+    id: 'guard',
+    name: 'The gate guard',
+    model: 'barbarian',
+    x: -4,
+    z: 24,
+    lines: [
+      'Welcome to the kingdom! Walk with WASD or the joystick, and use the map in the corner to travel.',
+      `Each landmark holds a piece of ${profile.name}'s work. Walk up to one and step inside.`,
+      'Stay a while. The kingdom changes with the time of day.',
+    ],
+  },
+  {
+    id: 'knight',
+    name: 'The keep knight',
+    model: 'knight',
+    x: 7,
+    z: -15,
+    lines: [
+      `Behind me is the keep, where ${profile.name}'s experience is recorded.`,
+      `He's been the sole developer of the Etalvis quiz platform since May 2025. The academy tower to the west tells that tale.`,
+      'Legend says the fountain grants a gift to those who make enough wishes.',
+    ],
+  },
+  {
+    id: 'ranger',
+    name: 'The ranger',
+    model: 'ranger',
+    x: 15,
+    z: 15,
+    lines: [
+      `The chess citadel holds ${profile.name}'s engine, written in C++.`,
+      "He's teaching it to judge positions with a neural network.",
+      'Speak with everyone in town, and the sky may celebrate.',
+    ],
+  },
+]
+
+export const paths: [Point, Point][] =[[SPAWN, FOUNTAIN], ...landmarks.map((l): [Point, Point] => [FOUNTAIN, l])]
 
 // Spot just in front of a landmark, on the side facing the fountain.
 export function arrivalPoint(landmark: Landmark): Point {
@@ -145,6 +203,7 @@ const ARRIVAL_CLEARING: Collider = { x: SPAWN.x, z: SPAWN.z + 5, r: 9 }
 function isOpenGround(p: Point, clearance: number) {
   return (
     Math.hypot(p.x - ARRIVAL_CLEARING.x, p.z - ARRIVAL_CLEARING.z) > ARRIVAL_CLEARING.r + clearance &&
+    !npcs.some((n) => Math.hypot(p.x - n.x, p.z - n.z) < clearance + 2.5) &&
     !landmarks.some((l) => Math.hypot(p.x - l.x, p.z - l.z) < l.radius + clearance + 2) &&
     !paths.some(([a, b]) => distanceToSegment(p, a, b) < clearance + 1.8) &&
     Math.hypot(p.x - FOUNTAIN.x, p.z - FOUNTAIN.z) > FOUNTAIN.r + clearance + 3
@@ -224,6 +283,7 @@ const colliders: Collider[] = [
   ...landmarks.map((l) => ({ x: l.x, z: l.z, r: l.solid })),
   ...houses.map((h) => ({ x: h.x, z: h.z, r: houseRadius[h.variant] })),
   ...trees.map((t) => ({ x: t.x, z: t.z, r: 0.55 })),
+  ...npcs.map((n) => ({ x: n.x, z: n.z, r: 0.6 })),
 ]
 
 export function resolveCollisions(p: Point, radius = 0.5) {
@@ -244,13 +304,22 @@ export function resolveCollisions(p: Point, radius = 0.5) {
   }
 }
 
-export function nearestLandmark(p: Point) {
-  let best: Landmark | null = null
-  let bestDistance = Infinity
-  for (const l of landmarks) {
-    const distance = Math.hypot(p.x - l.x, p.z - l.z) - l.radius
-    if (distance < INTERACT_RANGE && distance < bestDistance) {
-      best = l
+// Anything the hero can interact with: 'keep', 'npc:sage', 'fountain' and so on.
+export type TargetId = LandmarkId | `npc:${NpcId}` | 'fountain'
+
+export function nearestTarget(p: Point): TargetId | null {
+  const candidates: [TargetId, number][] = [
+    ...landmarks.map((l): [TargetId, number] => [l.id, Math.hypot(p.x - l.x, p.z - l.z) - l.radius]),
+    ...npcs.map((n): [TargetId, number] => [`npc:${n.id}`, Math.hypot(p.x - n.x, p.z - n.z) - 0.6]),
+    ['fountain', Math.hypot(p.x - FOUNTAIN.x, p.z - FOUNTAIN.z) - FOUNTAIN.r],
+  ]
+  let best: TargetId | null = null
+  let bestDistance = INTERACT_RANGE
+  for (const [id, distance] of candidates) {
+    // People need to be approached a bit closer than buildings.
+    const range = id.startsWith('npc:') ? 2.2 : INTERACT_RANGE
+    if (distance < range && distance < bestDistance) {
+      best = id
       bestDistance = distance
     }
   }

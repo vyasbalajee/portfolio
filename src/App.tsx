@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { Route, Routes, useLocation } from 'react-router-dom'
+import { ChatProvider } from './chat/Chat'
 import Footer from './components/Footer'
 import Header from './components/Header'
 import CaseStudy from './pages/CaseStudy'
@@ -27,7 +28,7 @@ export default function App() {
   const { pathname } = useLocation()
 
   return (
-    <>
+    <ChatProvider showLauncher={pathname !== '/world'}>
       <a className="skip-link" href="#main">
         Skip to content
       </a>
@@ -49,6 +50,6 @@ export default function App() {
         </Routes>
       </main>
       {pathname !== '/world' && <Footer />}
-    </>
+    </ChatProvider>
   )
 }

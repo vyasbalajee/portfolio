@@ -1,8 +1,8 @@
 import { useAnimations } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
-import { LoopRepeat, Vector3, type Group } from 'three'
-import { nearestLandmark, resolveCollisions, type LandmarkId } from './layout'
+import { LoopRepeat, Vector3, type Group, type Mesh } from 'three'
+import { nearestTarget, resolveCollisions, type TargetId } from './layout'
 import { HERO, HERO_ANIMATIONS, toonify, useModel } from './models'
 import { readInput, type WorldState } from './state'
 
@@ -20,7 +20,7 @@ function turnTowards(current: number, target: number, amount: number) {
 
 type Props = {
   state: WorldState
-  onNearby: (id: LandmarkId | null) => void
+  onNearby: (id: TargetId | null) => void
 }
 
 export default function Player({ state, onNearby }: Props) {
@@ -30,7 +30,8 @@ export default function Player({ state, onNearby }: Props) {
   const root = useRef<Group>(null)
   const { actions } = useAnimations(animations, root)
   const motion = useRef<Motion | null>(null)
-  const nearby = useRef<LandmarkId | null>(null)
+  const nearby = useRef<TargetId | null>(null)
+  const aura = useRef<Mesh>(null)
   const snapCamera = useRef(true)
   const desired = useMemo(() => new Vector3(), [])
   const focus = useMemo(() => new Vector3(), [])
@@ -64,7 +65,7 @@ export default function Player({ state, onNearby }: Props) {
     const moving = amount > 0.05
 
     if (moving) {
-      const speed = state.run ? RUN_SPEED : WALK_SPEED
+      const speed = (state.run ? RUN_SPEED : WALK_SPEED) * (state.blessed ? 1.4 : 1)
       position.x += input.x * speed * delta
       position.z += input.z * speed * delta
       resolveCollisions(position)
@@ -76,13 +77,17 @@ export default function Player({ state, onNearby }: Props) {
       play('Idle_A')
     }
     root.current?.position.set(position.x, 0, position.z)
+    if (aura.current) {
+      aura.current.visible = state.blessed
+      aura.current.rotation.z += delta * 1.5
+    }
 
     desired.copy(position).add(CAMERA_OFFSET)
     camera.position.lerp(desired, snapCamera.current ? 1 : 1 - Math.exp(-4 * delta))
     snapCamera.current = false
     camera.lookAt(focus.set(position.x, 2.6, position.z - 6))
 
-    const found = nearestLandmark(position)?.id ?? null
+    const found = nearestTarget(position)
     if (found !== nearby.current) {
       nearby.current = found
       onNearby(found)
@@ -92,6 +97,10 @@ export default function Player({ state, onNearby }: Props) {
   return (
     <group ref={root}>
       <primitive object={scene} scale={HERO_SCALE} />
+      <mesh ref={aura} visible={false} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
+        <ringGeometry args={[0.8, 1.05, 6]} />
+        <meshBasicMaterial color="#f5b942" transparent opacity={0.85} />
+      </mesh>
     </group>
   )
 }

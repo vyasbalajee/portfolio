@@ -2,13 +2,17 @@ import { useProgress } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useChat } from '../chat/Chat'
 import { profile } from '../content'
-import Environment from './Environment'
+import Environment, { localTimeOfDay, type TimeOfDay } from './Environment'
 import Joystick from './Joystick'
 import Landmarks from './Landmarks'
-import { SPAWN, landmarks, type Landmark, type LandmarkId } from './layout'
+import Lanterns from './Lanterns'
+import { SPAWN, landmarks, npcs, type Landmark, type Npc, type NpcId, type TargetId } from './layout'
 import MiniMap from './MiniMap'
 import { Nature, Village } from './models'
+import { AmbientMusic } from './music'
+import Npcs from './Npcs'
 import Player from './Player'
 import { createWorldState, movementKeys } from './state'
 
@@ -42,44 +46,132 @@ function hasWebGL() {
   }
 }
 
+type Panel =
+  | { kind: 'landmark'; landmark: Landmark }
+  | { kind: 'npc'; npc: Npc; line: number }
+  | { kind: 'fountain'; message: string }
+
+type TimeMode = 'local' | TimeOfDay
+const timeModes: TimeMode[] = ['local', 'day', 'golden', 'night']
+const timeLabels: Record<TimeOfDay, string> = { day: 'Day', golden: 'Golden hour', night: 'Night' }
+
+const wishes = [
+  'The coin sinks with a soft glimmer. Your wish is heard.',
+  'The water ripples gold. The fountain seems to be listening…',
+]
+const SECRETS = 2
+const KONAMI = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'KeyB', 'KeyA']
+
+function targetName(id: TargetId) {
+  if (id === 'fountain') return 'Toss a coin in the fountain'
+  if (id.startsWith('npc:')) return `Talk to ${npcs.find((n) => `npc:${n.id}` === id)!.name.toLowerCase()}`
+  return `Enter ${landmarks.find((l) => l.id === id)!.name}`
+}
+
 export default function World() {
   const [state] = useState(createWorldState)
   const [supported] = useState(hasWebGL)
-  const [nearby, setNearby] = useState<LandmarkId | null>(null)
-  const [open, setOpen] = useState<Landmark | null>(null)
-  const nearbyRef = useRef<LandmarkId | null>(null)
+  const [nearby, setNearby] = useState<TargetId | null>(null)
+  const [panel, setPanel] = useState<Panel | null>(null)
+  const [timeMode, setTimeMode] = useState<TimeMode>('local')
+  const [localTime, setLocalTime] = useState(localTimeOfDay)
+  const [musicOn, setMusicOn] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
+  const [secrets, setSecrets] = useState<Set<string>>(new Set())
+  const [talkedTo, setTalkedTo] = useState<Set<NpcId>>(new Set())
+  const coins = useRef(0)
+  const nearbyRef = useRef<TargetId | null>(null)
   const closeButton = useRef<HTMLButtonElement>(null)
+  const music = useRef<AmbientMusic | null>(null)
+  const konami = useRef<string[]>([])
   const touch = useMediaQuery('(pointer: coarse)')
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
+  const chat = useChat()
 
-  const nearbyLandmark = landmarks.find((l) => l.id === nearby) ?? null
+  const time = timeMode === 'local' ? localTime : timeMode
+  const lanterns = secrets.has('lanterns')
 
-  const handleNearby = useCallback((id: LandmarkId | null) => {
+  const announce = useCallback((message: string) => setToast(message), [])
+
+  const discover = useCallback(
+    (secret: string, message: string) => {
+      setSecrets((found) => {
+        if (found.has(secret)) return found
+        const next = new Set(found).add(secret)
+        announce(`${message} Secrets found: ${next.size} of ${SECRETS}.`)
+        return next
+      })
+    },
+    [announce],
+  )
+
+  const handleNearby = useCallback((id: TargetId | null) => {
     nearbyRef.current = id
     setNearby(id)
   }, [])
 
-  const enter = useCallback(() => {
-    const landmark = landmarks.find((l) => l.id === nearbyRef.current)
-    if (landmark) setOpen(landmark)
-  }, [])
+  const interact = useCallback(
+    (id: TargetId | null) => {
+      if (!id) return
+      if (id === 'fountain') {
+        coins.current += 1
+        if (coins.current >= 3) {
+          state.blessed = true
+          setPanel({ kind: 'fountain', message: 'The fountain glows! Swift golden boots are yours. Run with Shift to feel them.' })
+          discover('blessing', "You earned the fountain's blessing.")
+        } else {
+          setPanel({ kind: 'fountain', message: wishes[coins.current - 1] })
+        }
+        return
+      }
+      if (id.startsWith('npc:')) {
+        const npc = npcs.find((n) => `npc:${n.id}` === id)!
+        setTalkedTo((talked) => new Set(talked).add(npc.id))
+        setPanel({ kind: 'npc', npc, line: 0 })
+        return
+      }
+      setPanel({ kind: 'landmark', landmark: landmarks.find((l) => l.id === id)! })
+    },
+    [state, discover],
+  )
 
   useEffect(() => {
     document.title = `Sky kingdom | ${profile.name}`
   }, [])
 
+  // Follow the visitor's clock.
   useEffect(() => {
-    state.paused = open !== null
-    if (open) {
+    const timer = window.setInterval(() => setLocalTime(localTimeOfDay()), 60_000)
+    return () => clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    if (!toast) return
+    const timer = window.setTimeout(() => setToast(null), 5000)
+    return () => clearTimeout(timer)
+  }, [toast])
+
+  useEffect(() => {
+    if (talkedTo.size === npcs.length) discover('lanterns', 'Everyone in town is your friend now. The lantern festival begins!')
+  }, [talkedTo, discover])
+
+  useEffect(() => () => music.current?.stop(), [])
+
+  useEffect(() => {
+    state.paused = panel !== null
+    if (panel) {
       state.stick = { x: 0, z: 0 }
       closeButton.current?.focus()
     }
-  }, [open, state])
+  }, [panel, state])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (open) {
-        if (event.code === 'Escape') setOpen(null)
+      konami.current = [...konami.current, event.code].slice(-KONAMI.length)
+      if (konami.current.join() === KONAMI.join()) discover('lanterns', 'A secret code! The lantern festival begins!')
+
+      if (panel) {
+        if (event.code === 'Escape') setPanel(null)
         return
       }
       if (event.target instanceof Element && event.target.closest('button, a, input, textarea')) return
@@ -88,7 +180,7 @@ export default function World() {
         state.keys.add(event.code)
       }
       if (event.key === 'Shift') state.run = true
-      if (event.code === 'KeyE' || event.code === 'Enter') enter()
+      if (event.code === 'KeyE' || event.code === 'Enter') interact(nearbyRef.current)
     }
     const onKeyUp = (event: KeyboardEvent) => {
       state.keys.delete(event.code)
@@ -106,7 +198,20 @@ export default function World() {
       window.removeEventListener('keyup', onKeyUp)
       window.removeEventListener('blur', reset)
     }
-  }, [open, enter, state])
+  }, [panel, interact, discover, state])
+
+  const toggleMusic = () => {
+    if (musicOn) {
+      music.current?.stop()
+      music.current = null
+    } else {
+      music.current = new AmbientMusic()
+      music.current.start()
+    }
+    setMusicOn(!musicOn)
+  }
+
+  const cycleTime = () => setTimeMode(timeModes[(timeModes.indexOf(timeMode) + 1) % timeModes.length])
 
   if (!supported) {
     return (
@@ -120,8 +225,10 @@ export default function World() {
     )
   }
 
+  const talkingTo = panel?.kind === 'npc' ? panel.npc.id : null
+
   return (
-    <section className="world" aria-label="Explorable sky kingdom">
+    <section className={`world world-${time}`} aria-label="Explorable sky kingdom">
       <Canvas
         flat
         shadows={!touch}
@@ -130,10 +237,12 @@ export default function World() {
         camera={{ fov: 50, near: 0.5, far: 900, position: [SPAWN.x, 9.5, SPAWN.z + 13] }}
       >
         <Suspense fallback={null}>
-          <Environment shadows={!touch} />
+          <Environment shadows={!touch} time={time} />
           <Landmarks animate={!reducedMotion} />
           <Village />
           <Nature />
+          <Npcs state={state} talkingTo={talkingTo} />
+          <Lanterns active={lanterns} />
           <Player state={state} onNearby={handleNearby} />
         </Suspense>
       </Canvas>
@@ -146,10 +255,21 @@ export default function World() {
             'Drag the joystick to walk. Tap a landmark on the map to travel.'
           ) : (
             <>
-              <kbd>WASD</kbd> or arrow keys to walk, <kbd>Shift</kbd> to run, <kbd>E</kbd> to enter. Click the map to
+              <kbd>WASD</kbd> or arrow keys to walk, <kbd>Shift</kbd> to run, <kbd>E</kbd> to interact. Click the map to
               travel.
             </>
           )}
+        </p>
+        <div className="world-toggles">
+          <button type="button" onClick={cycleTime}>
+            Time: {timeMode === 'local' ? `Your clock (${timeLabels[localTime]})` : timeLabels[timeMode]}
+          </button>
+          <button type="button" onClick={toggleMusic} aria-pressed={musicOn}>
+            Music: {musicOn ? 'On' : 'Off'}
+          </button>
+        </div>
+        <p className="world-secrets">
+          Secrets found: {secrets.size} of {SECRETS}
         </p>
         <Link to="/">Skip the tour</Link>
         <p className="world-credits">Models by Kay Lousberg, Kenney and Quaternius (CC0).</p>
@@ -157,28 +277,82 @@ export default function World() {
 
       <MiniMap state={state} />
 
-      {nearbyLandmark && !open && (
-        <button type="button" className="world-prompt" onClick={() => setOpen(nearbyLandmark)}>
-          {!touch && <kbd>E</kbd>} Enter {nearbyLandmark.name}
+      {toast && (
+        <p className="world-toast" role="status">
+          {toast}
+        </p>
+      )}
+
+      {nearby && !panel && (
+        <button type="button" className="world-prompt" onClick={() => interact(nearby)}>
+          {!touch && <kbd>E</kbd>} {targetName(nearby)}
         </button>
       )}
 
-      {open && (
+      {panel && (
         <div className="world-panel" role="dialog" aria-modal="false" aria-labelledby="world-panel-title">
-          <h2 id="world-panel-title">{open.name}</h2>
-          <p>{open.blurb}</p>
-          <div className="actions">
-            <Link className="button button-primary" to={open.href}>
-              {open.cta}
-            </Link>
-            <button ref={closeButton} type="button" className="button" onClick={() => setOpen(null)}>
-              Keep exploring
-            </button>
-          </div>
+          {panel.kind === 'landmark' && (
+            <>
+              <h2 id="world-panel-title">{panel.landmark.name}</h2>
+              <p>{panel.landmark.blurb}</p>
+              <div className="actions">
+                <Link className="button button-primary" to={panel.landmark.href}>
+                  {panel.landmark.cta}
+                </Link>
+                <button ref={closeButton} type="button" className="button" onClick={() => setPanel(null)}>
+                  Keep exploring
+                </button>
+              </div>
+            </>
+          )}
+          {panel.kind === 'npc' && (
+            <>
+              <h2 id="world-panel-title">{panel.npc.name}</h2>
+              <p>{panel.npc.lines[panel.line]}</p>
+              <div className="actions">
+                {panel.npc.opensChat ? (
+                  <button
+                    type="button"
+                    className="button button-primary"
+                    onClick={() => {
+                      setPanel(null)
+                      chat.open(panel.npc.lines[0])
+                    }}
+                  >
+                    Ask the sage
+                  </button>
+                ) : (
+                  panel.line < panel.npc.lines.length - 1 && (
+                    <button
+                      type="button"
+                      className="button button-primary"
+                      onClick={() => setPanel({ ...panel, line: panel.line + 1 })}
+                    >
+                      Go on
+                    </button>
+                  )
+                )}
+                <button ref={closeButton} type="button" className="button" onClick={() => setPanel(null)}>
+                  Farewell
+                </button>
+              </div>
+            </>
+          )}
+          {panel.kind === 'fountain' && (
+            <>
+              <h2 id="world-panel-title">The fountain</h2>
+              <p>{panel.message}</p>
+              <div className="actions">
+                <button ref={closeButton} type="button" className="button" onClick={() => setPanel(null)}>
+                  Keep exploring
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
 
-      {touch && !open && <Joystick state={state} />}
+      {touch && !panel && <Joystick state={state} />}
     </section>
   )
 }
